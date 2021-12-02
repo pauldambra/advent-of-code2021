@@ -1,6 +1,9 @@
 from itertools import islice, tee
+from pathlib import Path
 from typing import Optional, Iterator
 from unittest import TestCase
+
+puzzle_input_path = Path(__file__).parent / "./part1.input"
 
 
 def sliding_windows(sequence: Iterator, window_size: int = 3) -> list:
@@ -47,7 +50,7 @@ class DayOne(TestCase):
         assert increases == 7
 
     def test_file_input(self):
-        with open("part1.input", "r", newline="\n") as f:
+        with open(puzzle_input_path, "r", newline="\n") as f:
             increases = check_sonar_readings_for_increases(iter(f.readlines()))
 
             assert increases == 1374
@@ -74,7 +77,7 @@ class DayOne(TestCase):
         assert increases == 5
 
     def test_file_input_in_windows(self):
-        with open("part1.input", "r", newline="\n") as f:
+        with open(puzzle_input_path, "r", newline="\n") as f:
             increases = check_sonar_readings_for_increases(
                 [sum(w) for w in sliding_windows(as_integers(iter(f.readlines())))]
             )
