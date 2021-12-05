@@ -32,6 +32,7 @@ class Board:
         self.numbers: Dict[str, tuple[int, int]] = {}
         self.marked_rows = {}
         self.marked_columns = {}
+        self.won_on_board = False
 
         rows = board.splitlines()
         self.column_win_length = len(rows)
@@ -50,6 +51,9 @@ class Board:
             self.row_win_length = x + 1
 
     def drawn(self, number: str) -> None:
+        if self.won_on_board:
+            return
+
         marked_positions = self.numbers.pop(number, None)
         if marked_positions is not None:
             (x, y) = marked_positions
@@ -64,10 +68,12 @@ class Board:
 
         for marked_row in self.marked_rows.values():
             if len(marked_row) == self.row_win_length:
+                self.won_on_board = True
                 self.win_listener(self, int(number))
 
         for marked_column in self.marked_columns.values():
             if len(marked_column) == self.column_win_length:
+                self.won_on_board = True
                 self.win_listener(self, int(number))
 
     def unmarked_numbers(self):
@@ -86,25 +92,34 @@ class WinningGame:
 
 
 class Bingo:
-    def __init__(self, drawn_numbers, boards: list[str]):
+    def __init__(self, drawn_numbers, boards: list[str], play_until_last_winner=False):
+        self.play_until_last_winner = play_until_last_winner
         self.boards = [Board(b, self.win) for b in boards]
         self.drawn_numbers = drawn_numbers
         self.winning_game: Optional[WinningGame] = None
 
     def win(self, board: Board, winning_number: int):
-        if self.winning_game is None:
+        if self.play_until_last_winner:
+            self.winning_game = WinningGame(board, winning_number)
+        elif self.winning_game is None:
             self.winning_game = WinningGame(board, winning_number)
 
     @classmethod
-    def parse(cls, subsystem_output: str) -> "Bingo":
+    def parse(cls, subsystem_output: str, play_until_last_winner=False) -> "Bingo":
         number_row, *boards = subsystem_output.split("\n\n")
         drawn_numbers = [n.strip() for n in number_row.split(",")]
-        return Bingo(drawn_numbers, boards)
+        return Bingo(
+            drawn_numbers=drawn_numbers,
+            boards=boards,
+            play_until_last_winner=play_until_last_winner,
+        )
 
     def play(self):
-        while self.winning_game is None:
-            for number in self.drawn_numbers:
-                for board in self.boards:
+        for number in self.drawn_numbers:
+            for board in self.boards:
+                if self.play_until_last_winner:
+                    board.drawn(number)
+                else:
                     if self.winning_game is None:
                         board.drawn(number)
                     else:
@@ -208,6 +223,13 @@ class TestBingo(TestCase):
         assert winning_game.winning_number == 24
         assert winning_game.final_score() == 4512
 
+    def test_find_last_winner_in_the_example(self):
+        game = Bingo.parse(subsystem_output=example_input, play_until_last_winner=True)
+        winning_game = game.play()
+
+        assert winning_game.winning_number == 13
+        assert winning_game.final_score() == 1924
+
     def test_find_winner_in_puzzle_input(self):
         puzzle_input_path = Path(__file__).parent / "./puzzle.input"
         with open(puzzle_input_path, "r", newline="\n") as f:
@@ -215,3 +237,11 @@ class TestBingo(TestCase):
             winning_game = game.play()
 
             assert winning_game.final_score() == 60368
+
+    def test_find_last_winner_in_puzzle_input(self):
+        puzzle_input_path = Path(__file__).parent / "./puzzle.input"
+        with open(puzzle_input_path, "r", newline="\n") as f:
+            game = Bingo.parse(f.read(), play_until_last_winner=True)
+            winning_game = game.play()
+
+            assert winning_game.final_score() == 17435
