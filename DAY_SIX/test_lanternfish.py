@@ -334,30 +334,6 @@ def tick(fish: dict[int, int], times: int) -> dict[int, int]:
     return current
 
 
-# def tick(fish: list[int]) -> list[int]:
-#     next_tick = []
-#     new_fish = 0
-#     for group in grouper(fish):
-#         if tuple(group) not in fish_fridge:
-#             chunk = []
-#             new_fish_chunk = 0
-#             for f in group:
-#                 if f == 0:
-#                     chunk.append(6)
-#                     new_fish_chunk += 1
-#                 elif f:
-#                     chunk.append(f - 1)
-#
-#             fish_fridge[tuple(group)] = (chunk, new_fish_chunk)
-#         else:
-#             (chunk, new_fish_chunk) = fish_fridge[tuple(group)]
-#
-#         next_tick += chunk
-#         new_fish += new_fish_chunk
-#
-#     return next_tick + [8] * new_fish
-
-
 class TestLanternFish(TestCase):
     def test_single_fish_one_tick(self):
         fish = tick({3: 1}, times=1)
