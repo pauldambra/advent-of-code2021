@@ -1,4 +1,5 @@
 from pathlib import Path
+from statistics import mean
 from unittest import TestCase
 
 
@@ -18,15 +19,29 @@ def distances_for(positions: list[int], target: int) -> list[int]:
     return [distance_between(p, target) for p in positions]
 
 
-def cost_of(distances: list[int]) -> int:
-    return sum(distances)
+increasing_costs: dict[int, int] = {}
 
 
-def get_cheapest_fuel_cost(crabs: str):
+def increasing_fuel_cost_for(distance: int) -> int:
+    if distance not in increasing_costs:
+        """cleverness from https://math.stackexchange.com/a/50487/405349"""
+        increasing_costs[distance] = mean([1, distance]) * distance
+
+    return increasing_costs[distance]
+
+
+def cost_of(distances: list[int], fuel_cost_is_constant: bool = True) -> int:
+    if fuel_cost_is_constant:
+        return sum(distances)
+    else:
+        return sum([increasing_fuel_cost_for(d) for d in distances])
+
+
+def get_cheapest_fuel_cost(crabs: str, fuel_cost_is_constant: bool = True):
     max_target = max_from(crabs)
-    current_smallest = 2000000
+    current_smallest = 200000000
     for n in range(0, max_target + 1):
-        cost = cost_of(distances_for(positions_of(crabs), n))
+        cost = cost_of(distances_for(positions_of(crabs), n), fuel_cost_is_constant)
         if cost < current_smallest:
             current_smallest = cost
     return current_smallest
@@ -62,3 +77,30 @@ class TestCrabPositions(TestCase):
         puzzle_input_path = Path(__file__).parent / "./puzzle.input"
         with open(puzzle_input_path, "r", newline="\n") as f:
             assert get_cheapest_fuel_cost(f.read()) == 348996
+
+    def test_sum_of_sequence(self):
+        sum_of_sequence = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10
+        assert sum_of_sequence == 55
+        # cleverness from https://math.stackexchange.com/a/50487/405349
+        assert increasing_fuel_cost_for(10) == sum_of_sequence
+
+    def test_can_get_cost_of_example_with_increasing_fuel_cost(self):
+        cost = cost_of(
+            distances_for(positions_of("16,1,2,0,4,2,7,1,2,14"), 2),
+            fuel_cost_is_constant=False,
+        )
+        assert cost == 206
+
+    def test_how_should_this_work_with_increasing_fuel_cost(self):
+        crabs = "16,1,2,0,4,2,7,1,2,14"
+        current_smallest = get_cheapest_fuel_cost(crabs, fuel_cost_is_constant=False)
+
+        assert current_smallest == 168
+
+    def test_for_puzzle_input_with_increasing_cost(self):
+        puzzle_input_path = Path(__file__).parent / "./puzzle.input"
+        with open(puzzle_input_path, "r", newline="\n") as f:
+            assert (
+                get_cheapest_fuel_cost(f.read(), fuel_cost_is_constant=False)
+                == 98231647
+            )
