@@ -1,8 +1,20 @@
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from queue import LifoQueue
 from typing import Optional
 from unittest import TestCase
+
+example = """[({(<(())[]>[[{[]{<()<>>
+[(()[<>])]({[<{<<[]>>(
+{([(<{}[<>[]}>{[]{[(<()>
+(((({<>}<{<{<>}{[]{[]{}
+[[<[([]))<([[{}[[()]]]
+[{[{({}]{}}([{[{{{}}([]
+{<[[]]>}<{[{[{[]{()[[[]
+[<(<(<(<{}))><([]([]()
+<{([([[(<>()){}]>(<<{{
+<{([{{}}[<[[[<>{}]]]>[]]"""
 
 chunk_delimiters = {"{": "}", "[": "]", "<": ">", "(": ")"}
 
@@ -17,12 +29,20 @@ error_points = {
     ">": 25137,
 }
 
+fix_points = {
+    ")": 1,
+    "]": 2,
+    "}": 3,
+    ">": 4,
+}
+
 
 @dataclass
 class SyntaxCheckResult:
     is_valid: bool
     expected_character: Optional[str] = None
     illegal_character: Optional[str] = None
+    needed_closing_characters: Optional[list[str]] = None
 
 
 def is_valid_line(line: str) -> SyntaxCheckResult:
@@ -43,20 +63,38 @@ def is_valid_line(line: str) -> SyntaxCheckResult:
                     )
 
     if not chunk_opening_queue.empty():
+        closers = list(
+            reversed([chunk_delimiters[char] for char in chunk_opening_queue.queue])
+        )
+
         return SyntaxCheckResult(
             is_valid=True,
             expected_character="incomplete",
             illegal_character="incomplete",
+            needed_closing_characters=closers,
         )
 
     return SyntaxCheckResult(is_valid=True)
 
 
-def syntax_check(lines: str) -> (list[SyntaxCheckResult], int):
+def syntax_check(
+    lines: str,
+) -> (list[SyntaxCheckResult], list[SyntaxCheckResult], int, list[int]):
     results = [is_valid_line(chunk) for chunk in lines.splitlines()]
     corrupt_lines = [chunk for chunk in results if not chunk.is_valid]
     score = sum([error_points[c.illegal_character] for c in corrupt_lines])
-    return corrupt_lines, score
+    incomplete_lines = [
+        chunk for chunk in results if chunk.illegal_character == "incomplete"
+    ]
+
+    fix_scores = []
+    for incomplete_line in incomplete_lines:
+        fix_scores.append(0)
+        for closer in incomplete_line.needed_closing_characters:
+            fix_scores[-1] *= 5
+            fix_scores[-1] += fix_points[closer]
+
+    return incomplete_lines, corrupt_lines, score, fix_scores
 
 
 class TestSyntaxChecker(TestCase):
@@ -70,6 +108,7 @@ class TestSyntaxChecker(TestCase):
             is_valid=True,
             expected_character="incomplete",
             illegal_character="incomplete",
+            needed_closing_characters=[")"],
         )
 
     def test_valid_chunks(self):
@@ -85,22 +124,37 @@ class TestSyntaxChecker(TestCase):
             assert is_valid_line(chunk) == SyntaxCheckResult(is_valid=True)
 
     def test_example_input(self):
-        example = """[({(<(())[]>[[{[]{<()<>>
-[(()[<>])]({[<{<<[]>>(
-{([(<{}[<>[]}>{[]{[(<()>
-(((({<>}<{<{<>}{[]{[]{}
-[[<[([]))<([[{}[[()]]]
-[{[{({}]{}}([{[{{{}}([]
-{<[[]]>}<{[{[{[]{()[[[]
-[<(<(<(<{}))><([]([]()
-<{([([[(<>()){}]>(<<{{
-<{([{{}}[<[[[<>{}]]]>[]]"""
-        corrupt_lines, score = syntax_check(example)
+        _, corrupt_lines, score, _ = syntax_check(example)
         assert len(corrupt_lines) == 5
         assert score == 26397
 
     def test_puzzle_input(self):
         puzzle_input_path = Path(__file__).parent / "./puzzle.input"
         with open(puzzle_input_path, "r", newline="\n") as f:
-            _, score = syntax_check(f.read())
+            _, _, score, _ = syntax_check(f.read())
             assert score == 168417
+
+    def test_first_incomplete_line(self):
+        incomplete_lines, _, _, fix_scores = syntax_check("[({(<(())[]>[[{[]{<()<>>")
+        assert len(incomplete_lines) == 1
+        assert incomplete_lines[0].needed_closing_characters == list("}}]])})]")
+
+    def test_score_example_incomplete_lines(self):
+        incomplete_lines, _, _, fix_scores = syntax_check(example)
+        assert len(fix_scores) == 5
+
+        assert fix_scores == [
+            288957,
+            5566,
+            1480781,
+            995444,
+            294,
+        ]
+
+        assert sorted(fix_scores)[math.floor(len(fix_scores) / 2)] == 288957
+
+    def test_score_puzzle_input_incomplete_lines(self):
+        puzzle_input_path = Path(__file__).parent / "./puzzle.input"
+        with open(puzzle_input_path, "r", newline="\n") as f:
+            incomplete_lines, _, _, fix_scores = syntax_check(f.read())
+            assert sorted(fix_scores)[len(fix_scores) // 2] == 2802519786
