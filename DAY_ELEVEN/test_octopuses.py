@@ -1,3 +1,4 @@
+import dataclasses
 from queue import SimpleQueue
 from unittest import TestCase
 
@@ -24,6 +25,29 @@ example_input = """5483143223
 5283751526"""
 
 
+@dataclasses.dataclass(frozen=True)
+class Coordinate:
+    x: int
+    y: int
+
+    def neighbours(self) -> list["Coordinate"]:
+        candidate_neighbours = [
+            Coordinate(self.x - 1, self.y - 1),
+            Coordinate(self.x, self.y - 1),
+            Coordinate(self.x + 1, self.y - 1),
+            Coordinate(self.x - 1, self.y),
+            Coordinate(self.x + 1, self.y),
+            Coordinate(self.x - 1, self.y + 1),
+            Coordinate(self.x, self.y + 1),
+            Coordinate(self.x + 1, self.y + 1),
+        ]
+        neighbours = []
+        for n in candidate_neighbours:
+            if 0 <= n.x < 10 and 0 <= n.y < 10:
+                neighbours.append(n)
+        return neighbours
+
+
 class Cavern:
     def __init__(self, grid: str):
         self.current_step = 0
@@ -34,30 +58,11 @@ class Cavern:
         for row_index, row in enumerate(grid.splitlines()):
             self.positions.append([int(r) for r in list(row)])
 
-    def __getitem__(self, coord: tuple) -> int:
-        return self.positions[coord[1]][coord[0]]
+    def __getitem__(self, coord: Coordinate) -> int:
+        return self.positions[coord.y][coord.x]
 
-    def __setitem__(self, coord: tuple, value: int) -> None:
-        self.positions[coord[1]][coord[0]] = value
-
-    @staticmethod
-    def _neighbours(coordinate: tuple[int, int]) -> list[tuple[int, int]]:
-        (x, y) = coordinate
-        candidate_neighbours = [
-            (x - 1, y - 1),
-            (x, y - 1),
-            (x + 1, y - 1),
-            (x - 1, y),
-            (x + 1, y),
-            (x - 1, y + 1),
-            (x, y + 1),
-            (x + 1, y + 1),
-        ]
-        neighbours = []
-        for n in candidate_neighbours:
-            if 0 <= n[0] < 10 and 0 <= n[1] < 10:
-                neighbours.append(n)
-        return neighbours
+    def __setitem__(self, coord: Coordinate, value: int) -> None:
+        self.positions[coord.y][coord.x] = value
 
     def step(self):
         self.current_step += 1
@@ -70,14 +75,14 @@ class Cavern:
         has_flashed = SimpleQueue()
         for y in range(10):
             for x in range(10):
-                coord = (x, y)
+                coord = Coordinate(x, y)
                 if self[coord] > 9:
                     flashed[coord] = True
                     has_flashed.put(coord)
 
         while not has_flashed.empty():
             flasher = has_flashed.get()
-            for n in self._neighbours(flasher):
+            for n in flasher.neighbours():
                 self[n] += 1
                 if self[n] > 9 and n not in flashed:
                     flashed[n] = True
@@ -101,14 +106,14 @@ class Cavern:
 class TestOctopuses(TestCase):
     def test_two_steps(self):
         cavern = Cavern(example_input)
-        assert cavern[(0, 0)] == 5
+        assert cavern[Coordinate(0, 0)] == 5
         cavern.step()
-        assert cavern[(0, 0)] == 6
-        assert cavern[(2, 0)] == 9
+        assert cavern[Coordinate(0, 0)] == 6
+        assert cavern[Coordinate(2, 0)] == 9
         assert cavern.flashes == 0
         cavern.step()
-        assert cavern[(2, 0)] == 0
-        assert cavern[(1, 0)] == 8
+        assert cavern[Coordinate(2, 0)] == 0
+        assert cavern[Coordinate(1, 0)] == 8
         assert cavern.flashes == 35
 
     def test_ten_steps(self):
