@@ -26,6 +26,8 @@ example_input = """5483143223
 
 class Cavern:
     def __init__(self, grid: str):
+        self.current_step = 0
+        self.synchronised_at = -1
         self.grid = grid
         self.positions = []
         self.flashes = 0
@@ -38,7 +40,8 @@ class Cavern:
     def __setitem__(self, coord: tuple, value: int) -> None:
         self.positions[coord[1]][coord[0]] = value
 
-    def _neighbours(self, coordinate: tuple[int, int]) -> list[tuple[int, int]]:
+    @staticmethod
+    def _neighbours(coordinate: tuple[int, int]) -> list[tuple[int, int]]:
         (x, y) = coordinate
         candidate_neighbours = [
             (x - 1, y - 1),
@@ -57,6 +60,8 @@ class Cavern:
         return neighbours
 
     def step(self):
+        self.current_step += 1
+
         for y in range(10):
             for x in range(10):
                 self.positions[y][x] += 1
@@ -79,6 +84,10 @@ class Cavern:
                     has_flashed.put(n)
 
         self.flashes += len(flashed)
+
+        if len(flashed) == 100:
+            self.synchronised_at = self.current_step
+
         for coord in flashed:
             self[coord] = 0
 
@@ -122,3 +131,17 @@ class TestOctopuses(TestCase):
             cavern.step()
 
         assert cavern.flashes == 1644
+
+    def test_first_synchronised_flash(self):
+        cavern = Cavern(example_input)
+        while cavern.synchronised_at == -1:
+            cavern.step()
+
+        assert cavern.synchronised_at == 195
+
+    def test_first_synchronised_flash_for_puzzle_input(self):
+        cavern = Cavern(puzzle_input)
+        while cavern.synchronised_at == -1:
+            cavern.step()
+
+        assert cavern.synchronised_at == 229
