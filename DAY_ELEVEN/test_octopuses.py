@@ -1,0 +1,124 @@
+from queue import SimpleQueue
+from unittest import TestCase
+
+puzzle_input = """1172728874
+6751454281
+2612343533
+1884877511
+7574346247
+2117413745
+7766736517
+4331783444
+4841215828
+6857766273"""
+
+example_input = """5483143223
+2745854711
+5264556173
+6141336146
+6357385478
+4167524645
+2176841721
+6882881134
+4846848554
+5283751526"""
+
+
+class Cavern:
+    def __init__(self, grid: str):
+        self.grid = grid
+        self.positions = []
+        self.flashes = 0
+        for row_index, row in enumerate(grid.splitlines()):
+            self.positions.append([int(r) for r in list(row)])
+
+    def __getitem__(self, coord: tuple) -> int:
+        return self.positions[coord[1]][coord[0]]
+
+    def __setitem__(self, coord: tuple, value: int) -> None:
+        self.positions[coord[1]][coord[0]] = value
+
+    def _neighbours(self, coordinate: tuple[int, int]) -> list[tuple[int, int]]:
+        (x, y) = coordinate
+        candidate_neighbours = [
+            (x - 1, y - 1),
+            (x, y - 1),
+            (x + 1, y - 1),
+            (x - 1, y),
+            (x + 1, y),
+            (x - 1, y + 1),
+            (x, y + 1),
+            (x + 1, y + 1),
+        ]
+        neighbours = []
+        for n in candidate_neighbours:
+            if 0 <= n[0] < 10 and 0 <= n[1] < 10:
+                neighbours.append(n)
+        return neighbours
+
+    def step(self):
+        for y in range(10):
+            for x in range(10):
+                self.positions[y][x] += 1
+
+        flashed = {}
+        has_flashed = SimpleQueue()
+        for y in range(10):
+            for x in range(10):
+                coord = (x, y)
+                if self[coord] > 9:
+                    flashed[coord] = True
+                    has_flashed.put(coord)
+
+        while not has_flashed.empty():
+            flasher = has_flashed.get()
+            for n in self._neighbours(flasher):
+                self[n] += 1
+                if self[n] > 9 and n not in flashed:
+                    flashed[n] = True
+                    has_flashed.put(n)
+
+        self.flashes += len(flashed)
+        for coord in flashed:
+            self[coord] = 0
+
+    def __str__(self) -> str:
+        grid = ""
+        for row in self.positions:
+            grid += "".join([str(r) for r in row]) + "\n"
+        return grid
+
+
+class TestOctopuses(TestCase):
+    def test_two_steps(self):
+        cavern = Cavern(example_input)
+        assert cavern[(0, 0)] == 5
+        cavern.step()
+        assert cavern[(0, 0)] == 6
+        assert cavern[(2, 0)] == 9
+        assert cavern.flashes == 0
+        cavern.step()
+        assert cavern[(2, 0)] == 0
+        assert cavern[(1, 0)] == 8
+        assert cavern.flashes == 35
+
+    def test_ten_steps(self):
+        cavern = Cavern(example_input)
+        for _ in range(10):
+            cavern.step()
+
+        assert cavern.flashes == 204
+
+    def test_hundred_steps(self):
+        cavern = Cavern(example_input)
+        for _ in range(100):
+            cavern.step()
+
+        assert cavern.flashes == 1656
+
+    def test_hundred_steps_from_puzzle_input(self):
+        cavern = Cavern(puzzle_input)
+        for _ in range(100):
+            cavern.step()
+
+        assert cavern.flashes == 1644
