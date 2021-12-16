@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import ClassVar, Optional
+import logging
 from unittest import TestCase
 
 puzzle_input = """VOKKVSKKPSBVOOKVCFOV
@@ -124,177 +123,106 @@ BC -> B
 CC -> N
 CN -> C"""
 
-PolymerTemplatePart = dict[int, tuple[str, int]]
+
+def parse(instructions: str):
+    parts = instructions.split("\n\n")
+    return parts[0], {
+        instruction[0]: f"{instruction[0][0]}{instruction[1]}"
+        for instruction in [line.split(" -> ") for line in parts[1].splitlines()]
+    }
 
 
-@dataclass(frozen=True)
-class PairInsertion:
-    left: str
-    right: str
-    addition: str
-    replacements: ClassVar[dict[tuple[int, str, int], tuple[int, str, int]]] = {}
-
-    def process(self, template_pair: PolymerTemplatePart) -> PolymerTemplatePart:
-        """
-
-        e.g. starting with { 0: (N, 1), 1: (N, 2) }
-        for rule NN -> NCN
-
-        we'd end up with
-            { 0: (N, 1), 1: (C, 2), 2: (N, 3) }
-
-        subsequently
-
-        anyone looking up (1, N, 2) needs to replace it with (2, N, 3)
-
-        :param template_pair:
-        :return:
-        """
-        assert len(template_pair) == 2
-        left_matches = False
-        right_matches = False
-        first: Optional[tuple[int, str, int]] = None
-        second: Optional[tuple[int, str, int]] = None
-
-        for index, (key, (char, next_char_index)) in enumerate(template_pair.items()):
-            if index == 0:
-                left_matches = char == self.left
-                first = (key, char, next_char_index)
-            else:
-                right_matches = char == self.right
-                second = (key, char, next_char_index)
-
-        assert first is not None
-        assert second is not None
-
-        first = PairInsertion.replacements.get(first, first)
-        second = PairInsertion.replacements.get(second, second)
-
-        insertion_result = {first[0]: (first[1], first[2])}
-        if left_matches and right_matches:
-            insertion_result[first[2]] = (self.addition, first[2] + 1)
-
-            next_char_index = first[2] + 2 if second[2] != -1 else -1
-            insertion_result[first[2] + 1] = (second[1], next_char_index)
-
-            PairInsertion.replacements[second] = (
-                first[2] + 1,
-                second[1],
-                next_char_index,
-            )
-        else:
-            next_char_index = first[2] + 1 if second[2] != -1 else -1
-            insertion_result[first[2]] = (second[1], next_char_index)
-
-        return insertion_result
+cache: dict[str, str] = {}
 
 
-def parse(instructions: str) -> tuple[PolymerTemplatePart, list[PairInsertion]]:
-    split = instructions.split("\n\n")
-    template: list[str] = list(split[0])
-    parsed_template = {}
-    for index, character in enumerate(template):
-        next_index = index + 1 if index + 1 < len(template) else -1
-        parsed_template[index] = (character, next_index)
+def take_step(pair_insertions: dict[str, str], polymer_template: str):
+    found: list[tuple[int, str]] = []
+    for key in sorted(cache.keys(), key=len, reverse=True):
+        index = polymer_template.find(key)
+        if index > -1:
+            found.append((index, key))
 
-    instructions = split[1]
-    parsed_instructions = []
-    for instruction in instructions.splitlines():
-        parts = instruction.split(" -> ")
-        pair = list(parts[0])
-        parsed_instructions.append(
-            PairInsertion(left=pair[0], right=pair[1], addition=parts[1])
-        )
+    # from start to end if none found
+    if len(found) == 0:
+        next_template = process_replacements(pair_insertions, polymer_template)
+    else:
+        # so go from start of string to first index in found doing replacements
+        cached_sections = sorted(found, key=lambda x: x[0])
+        logging.info(f"found cached sections: {cached_sections}")
+        next_template = ""
+        next_start = 0
+        for section in cached_sections:
+            found_index = section[0]
+            cache_key = section[1]
+            part = polymer_template[next_start : found_index + 1]
+            replaced_part = process_replacements(pair_insertions, part)
+            if next_start is not 0:
+                replaced_part = replaced_part[1:]
+            then = cache[cache_key]
+            next_start = found_index + len(cache_key) - 1
+            next_template += replaced_part + then
 
-    return parsed_template, parsed_instructions
+        if next_start != len(polymer_template):
+            still_to_process = polymer_template[next_start:]
+            final_piece = process_replacements(pair_insertions, still_to_process)
+            next_template += final_piece[1:]
 
+    new_template = next_template + polymer_template[-1]
 
-def enumerate_pairs(polymer_template: PolymerTemplatePart) -> list[PolymerTemplatePart]:
-    next_character = 0
-    while next_character is not -1:
-        pair = {}
-
-        left = polymer_template[next_character]
-        pair[next_character] = left
-        next_character = left[1]
-
-        if next_character is not -1:
-            try:
-                right = polymer_template[next_character]
-            except KeyError:
-                print(
-                    f"key error while trying to read {next_character} from {polymer_template}"
-                )
-                raise
-
-            pair[next_character] = right
-
-            yield pair
+    cache[polymer_template] = new_template
+    return new_template
 
 
-def take_step(
-    pair_insertions: list[PairInsertion], polymer_template: PolymerTemplatePart
-):
-    new_polymer_template = {}
-    for pair in enumerate_pairs(polymer_template):
-        result = {}
-        for pair_insertion in pair_insertions:
-            result = pair_insertion.process(pair)
-            if len(result) == 3:
-                break
-        new_polymer_template.update(result)
-    return new_polymer_template
+def process_replacements(pair_insertions: dict[str, str], haystack: str) -> str:
+    replaced = ""
+    for index in range(len(haystack)):
+        if index + 1 < len(haystack):
+            pair = haystack[index] + haystack[index + 1]
+            to_insert = pair_insertions.get(pair, pair[0])
+            replaced += to_insert
+    return replaced
 
 
 class TestPolymers(TestCase):
+    def setup_method(self, method):
+        cache.clear()
+
     def test_can_parse_template(self):
-        (polymer_template, _) = parse(example_input)
-        assert polymer_template == {0: ("N", 1), 1: ("N", 2), 2: ("C", 3), 3: ("B", -1)}
-
-    def test_can_enumerate_pairs_from_parsed(self):
-        (polymer_template, _) = parse(example_input)
-        pairs = [pair for pair in enumerate_pairs(polymer_template)]
-        assert pairs == [
-            {0: ("N", 1), 1: ("N", 2)},
-            {1: ("N", 2), 2: ("C", 3)},
-            {2: ("C", 3), 3: ("B", -1)},
-        ]
-
-    def test_can_parse_pair_insertions(self):
-        (_, pair_insertions) = parse(example_input)
-        assert pair_insertions == [
-            PairInsertion("C", "H", "B"),
-            PairInsertion("H", "H", "N"),
-            PairInsertion("C", "B", "H"),
-            PairInsertion("N", "H", "C"),
-            PairInsertion("H", "B", "C"),
-            PairInsertion("H", "C", "B"),
-            PairInsertion("H", "N", "C"),
-            PairInsertion("N", "N", "C"),
-            PairInsertion("B", "H", "H"),
-            PairInsertion("N", "C", "B"),
-            PairInsertion("N", "B", "B"),
-            PairInsertion("B", "N", "B"),
-            PairInsertion("B", "B", "N"),
-            PairInsertion("B", "C", "B"),
-            PairInsertion("C", "C", "N"),
-            PairInsertion("C", "N", "C"),
-        ]
+        (polymer_template, pair_insertions) = parse(example_input)
+        assert polymer_template == "NNCB"
+        assert pair_insertions == {
+            "CH": "CB",
+            "HH": "HN",
+            "CB": "CH",
+            "NH": "NC",
+            "HB": "HC",
+            "HC": "HB",
+            "HN": "HC",
+            "NN": "NC",
+            "BH": "BH",
+            "NC": "NB",
+            "NB": "NB",
+            "BN": "BB",
+            "BB": "BN",
+            "BC": "BB",
+            "CC": "CN",
+            "CN": "CC",
+        }
 
     def test_can_take_one_step(self):
         (polymer_template, pair_insertions) = parse(example_input)
 
-        new_polymer_template = take_step(pair_insertions, polymer_template)
+        next_template = take_step(pair_insertions, polymer_template)
 
-        assert new_polymer_template == {
-            0: ("N", 1),
-            1: ("C", 2),
-            2: ("N", 3),
-            3: ("B", 4),
-            4: ("C", 5),
-            5: ("H", 6),
-            6: ("B", -1),
-        }
+        assert next_template == "NCNBCHB"
+
+    def test_can_take_two_steps(self):
+        (polymer_template, pair_insertions) = parse(example_input)
+
+        next_template = take_step(pair_insertions, polymer_template)
+        next_template = take_step(pair_insertions, next_template)
+
+        assert next_template == "NBCCNBBBCBHCB"
 
     def test_can_take_ten_steps(self):
         (polymer_template, pair_insertions) = parse(example_input)
@@ -311,7 +239,7 @@ class TestPolymers(TestCase):
             polymer_template = take_step(pair_insertions, polymer_template)
 
         counts = {}
-        for (char, next) in polymer_template.values():
+        for char in list(polymer_template):
             if char not in counts:
                 counts[char] = 0
             counts[char] += 1
@@ -335,7 +263,7 @@ class TestPolymers(TestCase):
             polymer_template = take_step(pair_insertions, polymer_template)
 
         counts = {}
-        for (char, next) in polymer_template.values():
+        for char in list(polymer_template):
             if char not in counts:
                 counts[char] = 0
             counts[char] += 1
@@ -344,3 +272,50 @@ class TestPolymers(TestCase):
         min_letter = min(counts, key=counts.get)
 
         assert counts[max_letter] - counts[min_letter] == 3095
+
+    def test_copes_with_no_match(self):
+        polymer_template = "ABDEFG"
+        pair_instructions = {}
+        assert take_step(pair_instructions, polymer_template) == "ABDEFG"
+
+    def test_can_take_advantage_of_cache(self):
+        polymer_template = "ABCDEFGHIJKLMNO"
+        pair_instructions = {"AB": "AZ", "NO": "NZ"}
+        cache["BCDEFGHIJKLMN"] = "replaced"
+        assert take_step(pair_instructions, polymer_template) == "AZreplacedZO"
+
+    def test_can_take_advantage_of_two_things_in_cache(self):
+        # for template ABCDEFGHIJKLMNO
+        # expecting ABCD to ABZC
+        # and DEFG to replaced
+        # and then GHIJ to HI (drop the G cos it is on the replaced section)
+        # and then JKLM to also-replaced
+        # and then MNO to NZO (drop the M cos it is on the replaced section)
+        polymer_template = "ABCDEFGHIJKLMNO"
+        pair_instructions = {"BC": "BZ", "NO": "NZ"}
+        cache["DEFG"] = "replaced"
+        cache["JKLM"] = "also-replaced"
+        assert (
+            take_step(pair_instructions, polymer_template)
+            == "ABZCreplacedHIalso-replacedNZO"
+        )
+
+    # def test_can_count_chars_in_example_input_after_40_steps(self):
+    #     (polymer_template, pair_insertions) = parse(example_input)
+    #
+    #     for step in range(40):
+    #         logging.info(f"taking step {step + 1}")
+    #         polymer_template = take_step(pair_insertions, polymer_template)
+    #
+    #     counts = {}
+    #     for char in list(polymer_template):
+    #         if char not in counts:
+    #             counts[char] = 0
+    #         counts[char] += 1
+    #
+    #     max_letter = max(counts, key=counts.get)
+    #     assert max_letter == "B"
+    #     min_letter = min(counts, key=counts.get)
+    #     assert min_letter == "H"
+    #
+    #     assert counts[max_letter] - counts[min_letter] == 2188189693529
