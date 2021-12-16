@@ -3,35 +3,15 @@ from pathlib import Path
 from queue import SimpleQueue
 from unittest import TestCase
 
+from lib.grid import Coordinate, Grid, as_grid, find_neighbours
+
 example = """2199943210
 3987894921
 9856789892
 8767896789
 9899965678"""
 
-Grid = list[list[int]]
-Coordinate = tuple[int, int]
 LowPoints = list[tuple[int, Coordinate]]
-
-
-def as_grid(grid_description: str) -> Grid:
-    grid = []
-    for line in grid_description.splitlines():
-        grid.append([int(c) for c in list(line)])
-
-    return grid
-
-
-def find_neighbours(
-    coordinate: Coordinate, max_row: int, max_col: int
-) -> list[Coordinate]:
-    (x, y) = coordinate
-    candidate_neighbours = [(x - 1, y), (x, y - 1), (x + 1, y), (x, y + 1)]
-    neighbours = []
-    for n in candidate_neighbours:
-        if 0 <= n[0] <= max_col and 0 <= n[1] <= max_row:
-            neighbours.append(n)
-    return neighbours
 
 
 def get_risk_levels_of_lowest_points(lower: LowPoints) -> list[int]:
