@@ -1,5 +1,4 @@
 import dataclasses
-import logging
 from typing import Callable
 from unittest import TestCase
 
@@ -12,7 +11,7 @@ def to_ranges(description: str) -> tuple[list[int, int], list[int, int]]:
     y_range_description = sorted(y_desc[2::].split(".."))
     x_range = [int(x) for x in x_range_description]
     y_range = [int(y) for y in y_range_description]
-    logging.debug(f"x_range: {x_range} and y_range: {y_range}")
+    # logging.debug(f"x_range: {x_range} and y_range: {y_range}")
     return x_range, y_range
 
 
@@ -28,9 +27,9 @@ def parse_target_is_passed(description: str) -> Callable[[tuple[int, int]], bool
     def _is_passed(coord: tuple[int, int]) -> bool:
         is_passed_x = coord[0] > x_range[1]
         is_passed_y = coord[1] < y_range[0]
-        logging.debug(f"{coord[0]} > {x_range[1]}")
-        logging.debug(f"{coord[1]} < {y_range[0]}")
-        logging.debug(f"{coord} -> past x: {is_passed_x}, past y: {is_passed_y}")
+        # logging.debug(f"{coord[0]} > {x_range[1]}")
+        # logging.debug(f"{coord[1]} < {y_range[0]}")
+        # logging.debug(f"{coord} -> past x: {is_passed_x}, past y: {is_passed_y}")
         return is_passed_x or is_passed_y
 
     return _is_passed
@@ -48,9 +47,9 @@ def parse_target_is_within(description: str) -> Callable[[tuple[int, int]], bool
     def _is_within(coord: tuple[int, int]) -> bool:
         is_within_x = x_range[0] <= coord[0] <= x_range[1]
         is_within_y = y_range[0] <= coord[1] <= y_range[1]
-        logging.debug(f"{x_range[0]} <= {coord[0]} <= {x_range[1]}")
-        logging.debug(f"{y_range[0]} <= {coord[1]} <= {y_range[1]}")
-        logging.debug(f"{coord} -> within x: {is_within_x}, within_y: {is_within_y}")
+        # logging.debug(f"{x_range[0]} <= {coord[0]} <= {x_range[1]}")
+        # logging.debug(f"{y_range[0]} <= {coord[1]} <= {y_range[1]}")
+        # logging.debug(f"{coord} -> within x: {is_within_x}, within_y: {is_within_y}")
         return is_within_x and is_within_y
 
     return _is_within
@@ -160,7 +159,7 @@ class TestProbeShooting(TestCase):
             if p.position[1] > max_height:
                 max_height = p.position[1]
 
-            logging.debug(f"probe is now {p}")
+            # logging.debug(f"probe is now {p}")
             if is_within_target(p.position):
                 was_within_target = True
 
@@ -173,8 +172,10 @@ class TestProbeShooting(TestCase):
         is_past_target = parse_target_is_passed("target area: x=20..30, y=-10..-5")
         found_max_height = 0
 
+        initial_velocity_on_target = []
+
         for x in range(0, 100):
-            for y in range(0, 100):
+            for y in range(-100, 100):
                 p = Probe(x_velocity=x, y_velocity=y)
                 was_within_target = False
                 max_height = 0
@@ -187,16 +188,19 @@ class TestProbeShooting(TestCase):
                         if max_height > found_max_height:
                             found_max_height = max_height
                         was_within_target = True
+                        initial_velocity_on_target.append((x, y))
 
         assert found_max_height == 45
+        assert len(initial_velocity_on_target) == 112
 
     def test_find_max_height_puzzle_input(self):
         is_within_target = parse_target_is_within(puzzle_input)
         is_past_target = parse_target_is_passed(puzzle_input)
         found_max_height = 0
+        initial_velocity_on_target = []
 
-        for x in range(0, 200):
-            for y in range(0, 200):
+        for x in range(0, 500):
+            for y in range(-200, 500):
                 p = Probe(x_velocity=x, y_velocity=y)
                 was_within_target = False
                 max_height = 0
@@ -209,5 +213,7 @@ class TestProbeShooting(TestCase):
                         if max_height > found_max_height:
                             found_max_height = max_height
                         was_within_target = True
+                        initial_velocity_on_target.append((x, y))
 
         assert found_max_height == 7381
+        assert len(initial_velocity_on_target) == 3019
