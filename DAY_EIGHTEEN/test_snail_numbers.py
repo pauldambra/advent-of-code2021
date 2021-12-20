@@ -1,101 +1,126 @@
-from dataclasses import dataclass, field
-from functools import partial, update_wrapper
-from queue import LifoQueue
-from typing import Union
+import logging
+from typing import Optional
 from unittest import TestCase
 
 
-@dataclass(frozen=True)
-class SnailFishNumber:
-    x: Union[int, "SnailFishNumber"]
-    y: Union[int, "SnailFishNumber"]
-    parents: list[str] = field(default_factory=list, compare=False)
+class thingy:
+    def __init__(self, character: str):
+        self.character: str = character
+        self.previous: Optional["thingy"] = None
+        self.next: Optional["thingy"] = None
 
-    def __post_init__(self):
-        if isinstance(self.x, SnailFishNumber):
-            self.x.parents.append(str(self))
+    def __str__(self):
+        return self.character
 
-        if isinstance(self.y, SnailFishNumber):
-            self.y.parents.append(str(self))
 
-    def __add__(self, other):
-        return SnailFishNumber(self, other)
+def snailfish(snailfish_number: str) -> str:
+    first, *rest = list(snailfish_number)
+    previous = thingy(character=first)
+    next = None
+    for c in rest:
+        next = thingy(c)
+        previous.next = next
+        next.previous = previous
+        previous = next
 
-    @classmethod
-    def parse(cls, description: str) -> "SnailFishNumber":
-        init_queue = LifoQueue()
-        binding_left = True
-        for c in list(description):
-            if c == "[":
-                init_queue.put(SnailFishNumber)
-            elif c == ",":
-                binding_left = False
-            elif c == "]":
-                binding_left = True
-            else:
-                n = int(c)
-                if binding_left:
-                    constructor = init_queue.get()
-                    bound_constructor = update_wrapper(
-                        partial(constructor, x=n), constructor
-                    )
-                    init_queue.put(bound_constructor)
+    starting = next
+    while starting.previous is not None:
+        starting = starting.previous
+
+    pointer: thingy = starting
+    nesting = 0
+    before_explode = None
+    seeking_left = False
+    while pointer.next:
+        if before_explode is None:
+            if pointer.character == "[":
+                nesting += 1
+            elif pointer.character == "]":
+                nesting -= 1
+            pointer = pointer.next
+            if nesting == 4:
+                before_explode = pointer
+                seeking_left = True
+                pointer = pointer.next
+        else:
+            if seeking_left:
+                if not pointer.character.isnumeric():
+                    pointer = pointer.next
                 else:
-                    constructor = init_queue.get()
-                    snailfish_number = constructor(y=n)
-                    # if queue is not empty it is now the next init parameter of the next remaining init
-                    if not init_queue.empty():
-                        next_constructor = init_queue.get()
-                        bound_next_constructor = update_wrapper(
-                            partial(next_constructor, snailfish_number),
-                            next_constructor,
-                        )
-                        init_queue.put(bound_next_constructor)
-                        binding_left = True
+                    left_number = int(pointer.character)
+                    logging.debug(f"left hand side of explode is {left_number}")
+                    previous_number = None
+                    number_seeker = pointer
+                    while number_seeker.previous:
+                        number_seeker = number_seeker.previous
+                        if number_seeker.character.isnumeric():
+                            previous_number = number_seeker.character
+                            break
+
+                    if previous_number:
+                        left_number += int(previous_number)
                     else:
-                        init_queue.put(snailfish_number)
+                        left_number = 0
 
-        final_snailfish_number = init_queue.get()
-        assert isinstance(final_snailfish_number, SnailFishNumber)
+                    new_left = thingy(str(left_number))
+                    logging.debug(f"so new left is {new_left}")
+                    before_explode.next = new_left
+                    new_left.previous = before_explode
+                    before_explode = new_left
+                    seeking_left = False
+                    pointer = pointer.next
+            else:
+                if pointer.character == ",":
+                    pointer = pointer.next
 
-        final_snailfish_number
+                logging.debug(f"seeking right. i see {pointer}")
+                if pointer.character.isnumeric():
+                    right_number = int(pointer.character)
+                    logging.debug(f"right hand side of explode is {right_number}")
+                    next_number = None
+                    number_seeker = pointer
+                    while number_seeker.next:
+                        number_seeker = number_seeker.next
+                        if number_seeker.character.isnumeric():
+                            next_number = number_seeker.character
+                            break
 
-        return final_snailfish_number
+                    if next_number:
+                        right_number += int(next_number)
+                    else:
+                        right_number = 0
+
+                    new_right = thingy(str(right_number))
+                    logging.debug(f"so new right is {new_right}")
+                    comma = thingy(",")
+                    before_explode.next = comma
+                    comma.previous = before_explode
+                    comma.next = new_right
+                    new_right.previous = comma
+                    new_right.next = number_seeker.next
+                    before_explode = None
+                    seeking_left = False
+
+                    if number_seeker.next:
+                        number_seeker.next.previous = new_right
+                        pointer = new_right.next.next
+                    else:
+                        pointer = new_right
+                    logging.debug(f"now pointer is {pointer}")
+                    nesting -= 2
+
+                else:
+                    pointer = pointer.next
+
+    s = ""
+    while pointer.previous:
+        s += pointer.character
+        pointer = pointer.previous
+
+    return s[::-1]
 
 
 class TestSnailNumbers(TestCase):
-    def test_every_snailfish_number_is_a_pair(self):
-        sfn = SnailFishNumber(1, 2)
-        assert sfn == SnailFishNumber(1, 2)
-
-    def test_part_of_a_snailfish_number_can_be_a_snailfish_number(self):
-        sfn = SnailFishNumber(1, 2)
-        assert SnailFishNumber(1, sfn) == SnailFishNumber(1, SnailFishNumber(1, 2))
-
-    def test_can_add_numbers(self):
-        """[1,2] + [[3,4],5] becomes [[1,2],[[3,4],5]]"""
-        left = SnailFishNumber(1, 2)
-        right = SnailFishNumber(SnailFishNumber(3, 4), 5)
-        assert left + right == SnailFishNumber(
-            SnailFishNumber(1, 2), SnailFishNumber(SnailFishNumber(3, 4), 5)
-        )
-
-    def test_snailfish_numbers_are_aware_of_their_nesting(self):
-        left = SnailFishNumber(1, 2)
-        assert left.parents == []
-        nested = SnailFishNumber(3, 4)
-        assert nested.parents == []
-        SnailFishNumber(left, SnailFishNumber(1, nested))
-        assert len(nested.parents) == 1
-
-    def test_parse_the_simplest_snailfish_number(self):
-        assert SnailFishNumber.parse("[1,2]") == SnailFishNumber(1, 2)
-
     def test_snailfish_numbers_can_be_parsed_from_strings(self):
-        actual = SnailFishNumber(
-            SnailFishNumber(
-                SnailFishNumber(SnailFishNumber(SnailFishNumber(9, 8), 1), 2), 3
-            ),
-            4,
-        )
-        assert actual == SnailFishNumber.parse("[[[[0,9],2],3],4]")
+        assert snailfish("[[[[[9,8],1],2],3],4]") == "[[[[0,9],2],3],4]"
+        assert snailfish("[7,[6,[5,[4,[3,2]]]]]") == "[7,[6,[5,[7,0]]]]"
