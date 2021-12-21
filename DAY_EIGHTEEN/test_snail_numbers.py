@@ -13,6 +13,23 @@ class thingy:
         return self.character
 
 
+def pretty_print(thingy: thingy) -> str:
+    logging.debug(f"pretty printing a thingy with previous {thingy.previous}")
+    before = ""
+    before_thingy = thingy
+    while before_thingy.previous:
+        before_thingy = before_thingy.previous
+        before += before_thingy.character
+
+    after = ""
+    after_thingy = thingy
+    while after_thingy.next:
+        after_thingy = after_thingy.next
+        after += after_thingy.character
+
+    return f"\n{before[::-1]} * {thingy.character} * {after}"
+
+
 def snailfish(snailfish_number: str) -> str:
     first, *rest = list(snailfish_number)
     previous = thingy(character=first)
@@ -32,6 +49,9 @@ def snailfish(snailfish_number: str) -> str:
     before_explode = None
     seeking_left = False
     while pointer.next:
+        logging.debug("starting loop")
+        logging.debug(pretty_print(pointer))
+
         if before_explode is None:
             if pointer.character == "[":
                 nesting += 1
@@ -48,7 +68,7 @@ def snailfish(snailfish_number: str) -> str:
                     pointer = pointer.next
                 else:
                     left_number = int(pointer.character)
-                    logging.debug(f"left hand side of explode is {left_number}")
+                    logging.debug(pretty_print(pointer))
                     previous_number = None
                     number_seeker = pointer
                     while number_seeker.previous:
@@ -63,7 +83,7 @@ def snailfish(snailfish_number: str) -> str:
                         left_number = 0
 
                     new_left = thingy(str(left_number))
-                    logging.debug(f"so new left is {new_left}")
+                    logging.debug(pretty_print(pointer))
                     before_explode.next = new_left
                     new_left.previous = before_explode
                     before_explode = new_left
@@ -73,10 +93,10 @@ def snailfish(snailfish_number: str) -> str:
                 if pointer.character == ",":
                     pointer = pointer.next
 
-                logging.debug(f"seeking right. i see {pointer}")
+                logging.debug(pretty_print(pointer))
                 if pointer.character.isnumeric():
                     right_number = int(pointer.character)
-                    logging.debug(f"right hand side of explode is {right_number}")
+                    logging.debug(pretty_print(pointer))
                     next_number = None
                     number_seeker = pointer
                     while number_seeker.next:
@@ -91,7 +111,7 @@ def snailfish(snailfish_number: str) -> str:
                         right_number = 0
 
                     new_right = thingy(str(right_number))
-                    logging.debug(f"so new right is {new_right}")
+                    logging.debug(pretty_print(pointer))
                     comma = thingy(",")
                     before_explode.next = comma
                     comma.previous = before_explode
@@ -106,7 +126,7 @@ def snailfish(snailfish_number: str) -> str:
                         pointer = new_right.next.next
                     else:
                         pointer = new_right
-                    logging.debug(f"now pointer is {pointer}")
+                    logging.debug(pretty_print(pointer))
                     nesting -= 2
 
                 else:
@@ -121,6 +141,8 @@ def snailfish(snailfish_number: str) -> str:
 
 
 class TestSnailNumbers(TestCase):
-    def test_snailfish_numbers_can_be_parsed_from_strings(self):
+    def test_example_one(self):
         assert snailfish("[[[[[9,8],1],2],3],4]") == "[[[[0,9],2],3],4]"
+
+    def test_example_two(self):
         assert snailfish("[7,[6,[5,[4,[3,2]]]]]") == "[7,[6,[5,[7,0]]]]"
